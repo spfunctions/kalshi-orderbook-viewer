@@ -8,15 +8,36 @@ export interface OrderbookData {
   askLevels: Array<{price: number; size: number}>
 }
 
+/**
+ * Fetch a single market's orderbook by ticker.
+ *
+ * Routes through /api/public/markets?tickers=…&depth=true (the singular
+ * /api/public/market/{ticker} endpoint does not exist on the live API).
+ * Returns the first match. Throws if the ticker is not found.
+ */
 export async function fetchOrderbook(ticker: string): Promise<OrderbookData> {
-  const res = await fetch(`${BASE}/api/public/market/${encodeURIComponent(ticker)}?depth=true`)
-  if (!res.ok) throw new Error(`API error: ${res.status}`)
-  const m = await res.json()
+  const url = new URL('/api/public/markets', BASE)
+  url.searchParams.set('tickers', ticker)
+  url.searchParams.set('depth', 'true')
+  const res = await fetch(url.toString())
+  if (!res.ok) throw new Error(`SimpleFunctions API error ${res.status} for ${url.pathname}`)
+  const data = (await res.json()) as { markets?: Array<Record<string, unknown>> }
+  const m = data?.markets?.[0]
+  if (!m) throw new Error(`Market not found: ${ticker}`)
   return {
-    ticker: m.ticker, title: m.title, venue: m.venue, status: m.status,
-    price: m.price, bestBid: m.bestBid, bestAsk: m.bestAsk, spread: m.spread,
-    volume: m.volume || 0, volume24h: m.volume24h || 0, liquidityScore: m.liquidityScore,
-    bidLevels: m.bidLevels || [], askLevels: m.askLevels || [],
+    ticker: String(m.ticker ?? ticker),
+    title: String(m.title ?? ''),
+    venue: String(m.venue ?? ''),
+    status: String(m.status ?? ''),
+    price: Number(m.price ?? 0),
+    bestBid: m.bestBid as number | undefined,
+    bestAsk: m.bestAsk as number | undefined,
+    spread: m.spread as number | undefined,
+    volume: Number(m.volume ?? 0),
+    volume24h: m.volume24h as number | undefined,
+    liquidityScore: m.liquidityScore as string | undefined,
+    bidLevels: (m.bidLevels as OrderbookData['bidLevels']) ?? [],
+    askLevels: (m.askLevels as OrderbookData['askLevels']) ?? [],
   }
 }
 
